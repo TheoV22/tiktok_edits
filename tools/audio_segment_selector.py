@@ -5,20 +5,21 @@ Analyzes audio to find calm intro and rage drop sections.
 import numpy as np
 from moviepy import AudioFileClip
 
-def find_best_segment(audio_path: str, target_duration: float = 12.0) -> dict:
+def find_best_segment(audio_path: str, target_duration: float = 12.0, pattern: str = "calm-rage") -> dict:
     """
-    Finds the best segment of an audio track with calm intro and rage drop.
+    Finds the best segment of an audio track matching the desired pattern.
     
     Args:
         audio_path: Path to audio file
         target_duration: Desired segment duration in seconds
+        pattern: Desired intensity pattern (e.g., 'calm-rage', 'rage-calm', 'calm-rage-calm')
     
     Returns:
         dict: {
             'start_time': segment start in seconds,
             'end_time': segment end in seconds,
             'duration': segment duration,
-            'calm_end': timestamp where rage starts (within segment)
+            'calm_end': timestamp where rage starts (within segment) or None
         }
     """
     try:
@@ -57,33 +58,79 @@ def find_best_segment(audio_path: str, target_duration: float = 12.0) -> dict:
         
         energies = np.array(energies)
         
-        # Find segments with calm start and intense middle/end
+        # Pattern-based segment selection
+        target_windows = int(target_duration)
         best_score = -1
         best_start = 0
+        calm_end_time = target_duration * 0.6  # Default
         
-        target_windows = int(target_duration)
+        # Define pattern scoring functions
+        if pattern == "calm-rage":
+            # Low energy start, high energy end
+            for start_window in range(len(energies) - target_windows):
+                segment = energies[start_window:start_window + target_windows]
+                intro = np.mean(segment[:int(target_windows * 0.4)])
+                drop = np.mean(segment[int(target_windows * 0.5):])
+                score = drop - intro
+                if score > best_score:
+                    best_score, best_start = score, start_window
+                    calm_end_time = start_window + np.argmax(segment)
         
-        for start_window in range(len(energies) - target_windows):
-            segment_energies = energies[start_window:start_window + target_windows]
-            
-            # Score based on: low energy at start, high energy at end
-            intro_energy = np.mean(segment_energies[:int(target_windows * 0.4)])  # First 40%
-            drop_energy = np.mean(segment_energies[int(target_windows * 0.5):])  # Last 50%
-            
-            # Good segment has calm intro and rage drop
-            score = drop_energy - intro_energy  # Maximize difference
-            
-            if score > best_score:
-                best_score = score
-                best_start = start_window
+        elif pattern == "rage-calm":
+            # High energy start, low energy end
+            for start_window in range(len(energies) - target_windows):
+                segment = energies[start_window:start_window + target_windows]
+                intro = np.mean(segment[:int(target_windows * 0.4)])
+                outro = np.mean(segment[int(target_windows * 0.6):])
+                score = intro - outro
+                if score > best_score:
+                    best_score, best_start = score, start_window
+                    calm_end_time = start_window + int(target_windows * 0.7)
         
+        elif pattern == "calm-rage-calm":
+            # Low-high-low arc
+            for start_window in range(len(energies) - target_windows):
+                segment = energies[start_window:start_window + target_windows]
+                intro = np.mean(segment[:int(target_windows * 0.3)])
+                mid = np.mean(segment[int(target_windows * 0.4):int(target_windows * 0.6)])
+                outro = np.mean(segment[int(target_windows * 0.7):])
+                score = mid - (intro + outro) / 2
+                if score > best_score:
+                    best_score, best_start = score, start_window
+                    calm_end_time = start_window + int(target_windows * 0.4)
+        
+        elif "rage" in pattern and pattern.count("rage") >= 2:
+            # High energy throughout
+            for start_window in range(len(energies) - target_windows):
+                segment = energies[start_window:start_window + target_windows]
+                score = np.mean(segment)
+                if score > best_score:
+                    best_score, best_start = score, start_window
+                    calm_end_time = None  # No calm section
+        
+        elif "calm" in pattern and pattern.count("calm") >= 2:
+            # Low energy throughout
+            for start_window in range(len(energies) - target_windows):
+                segment = energies[start_window:start_window + target_windows]
+                score = -np.mean(segment)  # Prefer low energy
+                if score > best_score:
+                    best_score, best_start = score, start_window
+                    calm_end_time = None  # All calm
+        
+        else:
+            # Default to calm-rage for unknown patterns
+            for start_window in range(len(energies) - target_windows):
+                segment = energies[start_window:start_window + target_windows]
+                intro = np.mean(segment[:int(target_windows * 0.4)])
+                drop = np.mean(segment[int(target_windows * 0.5):])
+                score = drop - intro
+                if score > best_score:
+                    best_score, best_start = score, start_window
+                    calm_end_time = start_window + np.argmax(segment)
+        
+        # Calculate final segment times
         start_time = best_start
         end_time = start_time + target_duration
-        
-        # Find where the drop happens (max energy spike) within segment
-        segment_energies = energies[best_start:best_start + target_windows]
-        drop_idx = int(best_start + np.argmax(segment_energies))
-        calm_end_time = drop_idx
         
         audio_clip.close()
         
@@ -91,7 +138,7 @@ def find_best_segment(audio_path: str, target_duration: float = 12.0) -> dict:
             'start_time': float(start_time),
             'end_time': float(end_time),
             'duration': target_duration,
-            'calm_end': float(calm_end_time)
+            'calm_end': float(calm_end_time) if calm_end_time is not None else None
         }
         
     except Exception as e:
