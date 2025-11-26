@@ -2,9 +2,9 @@ from moviepy import VideoFileClip, AudioFileClip, concatenate_videoclips, vfx
 import numpy as np
 import os
 import random
-from tools.beat_detector import detect_beats, get_audio_intensity_segments
-from tools.clip_classifier import classify_multiple_clips
-from tools.audio_segment_selector import find_best_segment
+from video_making.beat_detector import detect_beats, get_audio_intensity_segments
+from video_making.clip_classifier import classify_multiple_clips
+from video_making.segment_selector import find_best_segment
 
 def create_anime_edit(audio_path: str, video_paths: list[str], output_path: str):
     """
