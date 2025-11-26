@@ -6,8 +6,9 @@ from google import genai
 from google.genai.types import Tool, FunctionDeclaration, Schema, Type
 import json
 import os
-from tools.beat_detector import detect_beats, get_audio_intensity_segments
-from tools.clip_classifier import classify_multiple_clips
+from video_making.beat_detector import detect_beats, get_audio_intensity_segments
+from video_making.clip_classifier import classify_multiple_clips
+from video_making.segment_selector import find_best_segment
 
 # Initialize Gemini client with API key from environment
 # If not set, will use a fallback non-LLM approach
@@ -230,7 +231,7 @@ def create_editing_plan(audio_path: str, tiktok_metadata: dict, clip_paths: list
     
     # Step 4: Analyze audio with pattern
     print("Analyzing audio structure...")
-    from tools.audio_segment_selector import find_best_segment
+    from video_making.segment_selector import find_best_segment
     
     segment_info = find_best_segment(audio_path, target_duration=target_duration, pattern=pattern)
     beat_data = detect_beats(audio_path)
