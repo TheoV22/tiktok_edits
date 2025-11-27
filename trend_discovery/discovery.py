@@ -26,7 +26,7 @@ from trend_discovery.utils import _get_popular_phonk_songs, _get_hardcoded_track
 # DATA-DRIVEN TRENDING DISCOVERY SYSTEM
 # ============================================================================
 
-async def get_trending_anime_edits_v2(count=3, temperature=0.5) -> Dict:
+async def get_trending_anime_edits_v2(count, temperature) -> Dict:
     """
     Data-driven workflow: 
     AniList anime → YouTube Shorts → Scoring → Selection → Audio Download → Clip Gathering
@@ -42,11 +42,13 @@ async def get_trending_anime_edits_v2(count=3, temperature=0.5) -> Dict:
     
     # Step 1: Get 10 trending anime (5 airing + 5 finished)
     print("\n[Step 1] Getting trending anime from AniList...")
-    anime_list = await get_anilist_trending_split(airing_count=5, finished_count=5)
+    airing_count = int(count * 0.5)
+    finished_count = count - airing_count
+    anime_list = await get_anilist_trending_split(airing_count=airing_count, finished_count=finished_count)
     
     if not anime_list:
         print("  ✗ AniList failed, trying Kitsu...")
-        anime_list = await _try_kitsu_trending(10)
+        anime_list = await _try_kitsu_trending(count)
     
     if not anime_list:
         print("  ✗ All anime sources failed")
@@ -54,7 +56,7 @@ async def get_trending_anime_edits_v2(count=3, temperature=0.5) -> Dict:
     
     print(f"  ✓ Got {len(anime_list)} trending anime")
     
-    # Step 2: Search YouTube Shorts for each anime (3 shorts each = 30 total)
+    # Step 2: Search YouTube Shorts for each anime (3 shorts each)
     print("\n[Step 2] Searching YouTube Shorts for each anime...")
     all_shorts = []
     for anime in anime_list:
@@ -101,7 +103,7 @@ async def get_trending_anime_edits_v2(count=3, temperature=0.5) -> Dict:
         print(f"  → Getting clips for: {anime_title}")
         clips = await get_high_quality_clips(
             anime_title,
-            count=5,
+            count=3,
             sources=['sakugabooru', 'youtube_hq', 'youtube_shorts'],
             output_dir="output/clips"
         )
