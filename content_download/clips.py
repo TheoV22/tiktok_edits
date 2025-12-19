@@ -1,3 +1,4 @@
+import sys
 import imageio_ffmpeg
 import os
 import subprocess
@@ -100,15 +101,19 @@ async def get_clips_from_sakugabooru(anime_title: str, count: int, output_dir: s
 
 async def get_clips_from_youtube_hq(anime_title: str, count: int, output_dir: str) -> List[str]:
     """
-    Search YouTube for high-quality clips (no watermark, 4k).
+    Search YouTube for high-quality clips (scenepacks, logoless, 4k).
     """
     queries = [
+        f"{anime_title} scenepack raw",
+        f"{anime_title} clips 1080p logoless",
+        f"{anime_title} fight scene raw",
+        f"{anime_title} badass moments raw",
         f"{anime_title} twixtor no watermark",
-        f"{anime_title} clips 4k",
-        f"{anime_title} raw scenes"
     ]
     
     downloaded_clips = []
+    # Use python -m yt_dlp convention if not in path, but here we assume existing env setup
+    # If imageio_ffmpeg is used, we get its binary path
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     
     for query in queries:
@@ -119,16 +124,17 @@ async def get_clips_from_youtube_hq(anime_title: str, count: int, output_dir: st
         output_template = os.path.join(output_dir, "hq_%(id)s.%(ext)s")
         
         cmd = [
-            "yt-dlp",
+            sys.executable, "-m", "yt_dlp", # Use module execution to ensure it uses the installed package
             "--ffmpeg-location", ffmpeg_exe,
             "-f", "bestvideo[ext=mp4]+bestaudio[ext=m4a]/best[ext=mp4]/best",
-            "--max-filesize", "50M",
-            "--match-filter", "duration > 5 & duration < 45",  # Short clips only
+            "--max-filesize", "300M", # Increased for scenepacks
+            "--match-filter", "duration > 10 & duration < 300", # Allow longer clips (up to 5 mins for scenepacks)
             "-o", output_template,
             search_query
         ]
         
         try:
+            print(f"    Searching YouTube for: {query}")
             subprocess.run(cmd, check=True, capture_output=True)
             
             # Find new files
@@ -139,7 +145,7 @@ async def get_clips_from_youtube_hq(anime_title: str, count: int, output_dir: st
                     downloaded_clips.append(f)
                     
         except Exception as e:
-            print(f"    YouTube HQ error: {e}")
+            print(f"    YouTube HQ error for query '{query}': {e}")
             continue
             
     return downloaded_clips
